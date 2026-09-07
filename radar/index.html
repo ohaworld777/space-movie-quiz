@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📡 항공기 레이더 시스템 - 퀴즈 배틀!</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { width:100%; height:100%; overflow:hidden; font-family:'Malgun Gothic','맑은 고딕',sans-serif; }
+body { background:linear-gradient(180deg,#0a0e2a 0%,#1a2455 40%,#2a3a7a 100%); position:relative; user-select:none; }
+
+/* ===== 별 배경 ===== */
+#stars { position:fixed; inset:0; z-index:0; pointer-events:none; }
+#fxCanvas { position:fixed; inset:0; z-index:50; pointer-events:none; }
+
+/* ===== 공통 화면 ===== */
+.screen { position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; z-index:10; }
+.screen.active { display:flex; }
+
+/* ===== 시작 화면 ===== */
+#startScreen { text-align:center; }
+.title-main {
+  font-size:min(9vw,64px); font-weight:900; color:#fff;
+  text-shadow:0 0 20px #4fc3f7,0 0 40px #4fc3f7,0 4px 0 #01579b;
+  animation:titleBounce 2s ease-in-out infinite;
+  letter-spacing:2px;
+}
+.title-sub { font-size:min(4.5vw,28px); color:#ffd54f; margin-top:12px; font-weight:bold; text-shadow:0 2px 8px rgba(0,0,0,.6); }
+@keyframes titleBounce { 0%,100%{transform:translateY(0) scale(1);} 50%{transform:translateY(-12px) scale(1.03);} }
+.plane-hero { margin:20px 0; animation:planeFly 3s ease-in-out infinite; font-size:min(30vw,150px); line-height:1; filter:drop-shadow(0 0 28px #4fc3f7); }
+.plane-hero img { width:min(55vw,320px); height:auto; filter:drop-shadow(0 0 28px #4fc3f7) drop-shadow(0 10px 16px rgba(0,0,0,.55)); }
+.ship-img { width:min(26vw,150px); height:auto; display:block; filter:drop-shadow(0 0 16px #4fc3f7) drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
+
+/* ===== 보스 완전 파괴 연출 ===== */
+#flashOverlay { position:fixed; inset:0; background:#fff; opacity:0; z-index:80; pointer-events:none; }
+#flashOverlay.flash { animation:whiteFlash .5s; }
+@keyframes whiteFlash { 0%{opacity:0;} 20%{opacity:.95;} 100%{opacity:0;} }
+#bossMon.dying { animation:bossDying 2.2s forwards !important; }
+@keyframes bossDying {
+  0%   { transform:scaleX(-1) rotate(0deg);   filter:drop-shadow(0 0 14px #ff1744) brightness(1); opacity:1; }
+  15%  { transform:scaleX(-1) translateX(16px) rotate(10deg);  filter:brightness(2.5) drop-shadow(0 0 30px #ff9100); }
+  30%  { transform:scaleX(-1) translateX(-16px) rotate(-12deg); filter:brightness(1.2); }
+  45%  { transform:scaleX(-1) translateX(12px) rotate(14deg);  filter:brightness(3) drop-shadow(0 0 40px #ffd54f); }
+  60%  { transform:scaleX(-1) translateX(-10px) rotate(-16deg) scale(1.15); filter:brightness(1.4); }
+  78%  { transform:scaleX(-1) rotate(20deg) scale(1.35); filter:brightness(4) drop-shadow(0 0 60px #fff); opacity:1; }
+  100% { transform:scaleX(-1) rotate(50deg) scale(0.1) translateY(40px); filter:brightness(5); opacity:0; }
+}
+.destroy-msg { position:fixed; top:38%; left:50%; transform:translate(-50%,-50%); z-index:85;
+  font-size:min(10vw,58px); font-weight:900; color:#ffd54f; text-shadow:0 0 30px #ff6d00,0 5px 0 #7a3f00;
+  opacity:0; pointer-events:none; }
+.destroy-msg.show { animation:destroyMsgPop 1.6s forwards; }
+@keyframes destroyMsgPop { 0%{opacity:0; transform:translate(-50%,-50%) scale(.2);} 25%{opacity:1; transform:translate(-50%,-50%) scale(1.3);} 60%{opacity:1; transform:translate(-50%,-50%) scale(1);} 100%{opacity:0; transform:translate(-50%,-50%) scale(1.1) translateY(-40px);} }
+@keyframes planeFly { 0%,100%{transform:translateX(-30px) rotate(-5deg);} 50%{transform:translateX(30px) rotate(5deg) translateY(-15px);} }
+
+.big-btn {
+  font-size:min(6vw,32px); font-weight:900; padding:18px 60px; border:none; border-radius:60px;
+  background:linear-gradient(180deg,#ffd54f,#ff8f00); color:#4e2600; cursor:pointer;
+  box-shadow:0 6px 0 #bf6000,0 12px 30px rgba(255,160,0,.5);
+  transition:transform .1s; animation:btnPulse 1.5s infinite; margin-top:14px;
+}
+.big-btn:hover { transform:scale(1.08); }
+.big-btn:active { transform:translateY(4px); box-shadow:0 2px 0 #bf6000; }
+@keyframes btnPulse { 0%,100%{box-shadow:0 6px 0 #bf6000,0 12px 30px rgba(255,160,0,.5);} 50%{box-shadow:0 6px 0 #bf6000,0 12px 55px rgba(255,220,0,.9);} }
+.start-info { color:#b3e5fc; font-size:min(3.5vw,18px); margin-top:22px; line-height:1.7; }
+
+/* ===== 배틀 화면 ===== */
+#battleScreen { justify-content:flex-start; padding:12px; }
+.hud { width:100%; max-width:900px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.hud-box { flex:1; background:rgba(0,0,0,.45); border:2px solid #4fc3f7; border-radius:14px; padding:8px 14px; }
+.hud-name { color:#fff; font-weight:900; font-size:min(3.5vw,17px); display:flex; justify-content:space-between; }
+.hp-bar { height:16px; background:#263238; border-radius:10px; overflow:hidden; margin-top:5px; border:1px solid rgba(255,255,255,.3); }
+.hp-fill { height:100%; border-radius:10px; transition:width .6s cubic-bezier(.2,1.4,.4,1); }
+#playerHp { background:linear-gradient(90deg,#00e676,#76ff03); width:100%; }
+#bossHp { background:linear-gradient(90deg,#ff1744,#ff9100); width:100%; }
+.score-box { background:rgba(0,0,0,.45); border:2px solid #ffd54f; border-radius:14px; padding:8px 16px; color:#ffd54f; font-weight:900; font-size:min(4vw,20px); white-space:nowrap; }
+
+.arena { width:100%; max-width:900px; height:min(26vh,190px); position:relative; margin-top:6px; }
+.fighter { position:absolute; bottom:0; font-size:min(15vw,86px); transition:transform .15s; }
+#playerJet { left:6%; filter:drop-shadow(0 0 14px #4fc3f7); animation:hover1 2s ease-in-out infinite; }
+#bossMon { right:6%; filter:drop-shadow(0 0 14px #ff1744); animation:hover2 2.4s ease-in-out infinite; transform:scaleX(-1); }
+@keyframes hover1 { 0%,100%{bottom:0;} 50%{bottom:14px;} }
+@keyframes hover2 { 0%,100%{bottom:8px;} 50%{bottom:-4px;} }
+.fighter.attack-r { animation:lungeR .5s !important; }
+.fighter.attack-l { animation:lungeL .5s !important; }
+.fighter.hurt { animation:hurtShake .5s !important; }
+@keyframes lungeR { 30%{transform:translateX(220px) scale(1.15);} 100%{transform:translateX(0);} }
+@keyframes lungeL { 30%{transform:translateX(-220px) scaleX(-1) scale(1.15);} 100%{transform:translateX(0) scaleX(-1);} }
+@keyframes hurtShake { 0%,100%{transform:translateX(0);} 20%,60%{transform:translateX(-14px) rotate(-8deg);} 40%,80%{transform:translateX(14px) rotate(8deg);} }
+#bossMon.hurt { animation:hurtShakeB .5s !important; }
+@keyframes hurtShakeB { 0%,100%{transform:scaleX(-1);} 20%,60%{transform:scaleX(-1) translateX(14px) rotate(8deg);} 40%,80%{transform:scaleX(-1) translateX(-14px) rotate(-8deg);} }
+
+.combo-tag { position:absolute; top:0; left:50%; transform:translateX(-50%); font-size:min(6vw,34px); font-weight:900; color:#ffd54f; text-shadow:0 0 16px #ff8f00,0 3px 0 #7a3f00; opacity:0; }
+.combo-tag.show { animation:comboPop .9s; }
+@keyframes comboPop { 0%{opacity:0; transform:translateX(-50%) scale(.3);} 30%{opacity:1; transform:translateX(-50%) scale(1.4);} 70%{opacity:1; transform:translateX(-50%) scale(1);} 100%{opacity:0; transform:translateX(-50%) scale(1) translateY(-30px);} }
+
+.q-card {
+  width:100%; max-width:900px; background:rgba(255,255,255,.97); border-radius:22px;
+  padding:min(4vw,22px); margin-top:8px; box-shadow:0 10px 40px rgba(0,0,0,.5);
+  border:4px solid #4fc3f7; animation:cardIn .45s cubic-bezier(.2,1.4,.4,1);
+}
+@keyframes cardIn { from{opacity:0; transform:translateY(40px) scale(.9);} to{opacity:1; transform:translateY(0) scale(1);} }
+.q-num { display:inline-block; background:linear-gradient(135deg,#4fc3f7,#0277bd); color:#fff; font-weight:900; padding:5px 16px; border-radius:20px; font-size:min(3.5vw,16px); margin-bottom:8px; }
+.q-text { font-size:min(4.6vw,23px); font-weight:900; color:#1a237e; line-height:1.45; margin-bottom:14px; }
+.choices { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+@media (max-width:640px){ .choices{grid-template-columns:1fr;} }
+.choice {
+  background:linear-gradient(180deg,#e3f2fd,#bbdefb); border:3px solid #64b5f6; border-radius:16px;
+  padding:min(3vw,14px) min(3vw,16px); font-size:min(4vw,19px); font-weight:bold; color:#0d47a1;
+  cursor:pointer; transition:all .15s; text-align:left; display:flex; align-items:center; gap:10px;
+}
+.choice:hover { transform:scale(1.03); background:linear-gradient(180deg,#fff,#e3f2fd); border-color:#1976d2; box-shadow:0 4px 16px rgba(25,118,210,.4); }
+.choice:active { transform:scale(.97); }
+.choice .letter { flex-shrink:0; width:34px; height:34px; border-radius:50%; background:#1976d2; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:900; }
+.choice.correct { background:linear-gradient(180deg,#b9f6ca,#69f0ae) !important; border-color:#00c853 !important; color:#1b5e20 !important; animation:correctFlash .5s; }
+.choice.correct .letter { background:#00c853; }
+.choice.wrong { background:linear-gradient(180deg,#ffcdd2,#ef9a9a) !important; border-color:#e53935 !important; color:#b71c1c !important; animation:wrongShake .45s; }
+.choice.wrong .letter { background:#e53935; }
+.choice.dim { opacity:.4; pointer-events:none; }
+@keyframes correctFlash { 0%,100%{transform:scale(1);} 50%{transform:scale(1.07);} }
+@keyframes wrongShake { 0%,100%{transform:translateX(0);} 25%,75%{transform:translateX(-10px);} 50%{transform:translateX(10px);} }
+
+/* 해설 팝업 */
+#explainBox {
+  position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center;
+  background:rgba(0,0,20,.65); padding:16px;
+}
+#explainBox.show { display:flex; }
+.explain-card {
+  max-width:640px; width:100%; border-radius:24px; padding:26px; text-align:center;
+  animation:cardIn .4s cubic-bezier(.2,1.4,.4,1); box-shadow:0 16px 60px rgba(0,0,0,.6);
+}
+.explain-card.ok { background:linear-gradient(180deg,#e8f5e9,#c8e6c9); border:5px solid #00c853; }
+.explain-card.no { background:linear-gradient(180deg,#ffebee,#ffcdd2); border:5px solid #e53935; }
+.explain-emoji { font-size:60px; animation:titleBounce 1s infinite; }
+.explain-title { font-size:min(6.5vw,32px); font-weight:900; margin:6px 0; }
+.explain-card.ok .explain-title { color:#1b5e20; }
+.explain-card.no .explain-title { color:#b71c1c; }
+.explain-text { font-size:min(4.2vw,19px); color:#37474f; line-height:1.6; font-weight:bold; background:rgba(255,255,255,.7); border-radius:14px; padding:14px; margin:10px 0; }
+.next-btn {
+  font-size:min(4.5vw,22px); font-weight:900; padding:12px 44px; border:none; border-radius:40px;
+  background:linear-gradient(180deg,#4fc3f7,#0277bd); color:#fff; cursor:pointer;
+  box-shadow:0 5px 0 #01579b; transition:transform .1s; margin-top:6px;
+}
+.next-btn:active { transform:translateY(4px); box-shadow:0 1px 0 #01579b; }
+
+/* 데미지 숫자 */
+.dmg-num { position:fixed; z-index:70; font-size:min(8vw,44px); font-weight:900; pointer-events:none; animation:dmgFloat 1s forwards; text-shadow:0 3px 0 rgba(0,0,0,.5); }
+@keyframes dmgFloat { 0%{opacity:0; transform:translateY(0) scale(.5);} 20%{opacity:1; transform:translateY(-20px) scale(1.3);} 100%{opacity:0; transform:translateY(-90px) scale(1);} }
+
+/* 결과 화면 */
+#resultScreen { text-align:center; padding:20px; }
+.result-emoji { font-size:min(24vw,130px); animation:titleBounce 1.5s infinite; }
+.result-title { font-size:min(9vw,54px); font-weight:900; color:#fff; text-shadow:0 0 24px #ffd54f,0 4px 0 #7a3f00; margin:8px 0; }
+.result-stats { background:rgba(0,0,0,.45); border:3px solid #ffd54f; border-radius:22px; padding:20px 40px; margin:14px 0; }
+.result-stats div { color:#fff; font-size:min(5vw,25px); font-weight:bold; margin:8px 0; }
+.result-stats span { color:#ffd54f; font-weight:900; }
+.stars-row { font-size:min(11vw,58px); margin:6px 0; }
+.star { display:inline-block; opacity:.25; transform:scale(.6); transition:all .4s cubic-bezier(.2,1.8,.4,1); }
+.star.lit { opacity:1; transform:scale(1); filter:drop-shadow(0 0 14px #ffd54f); }
+
+/* 화면 흔들림 */
+body.shake { animation:bodyShake .4s; }
+@keyframes bodyShake { 0%,100%{transform:translate(0,0);} 20%{transform:translate(-12px,6px);} 40%{transform:translate(12px,-6px);} 60%{transform:translate(-8px,-8px);} 80%{transform:translate(8px,8px);} }
+
+/* 사운드 토글 */
+#sndBtn { position:fixed; top:10px; right:10px; z-index:100; font-size:24px; background:rgba(0,0,0,.5); border:2px solid #4fc3f7; color:#fff; border-radius:50%; width:48px; height:48px; cursor:pointer; }
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<canvas id="fxCanvas"></canvas>
+<button id="sndBtn" onclick="toggleSound()">🔊</button>
+<div id="flashOverlay"></div>
+<div class="destroy-msg" id="destroyMsg">💥 폭풍우 몬스터 완전 파괴! 💥</div>
+
+<!-- 시작 화면 -->
+<div class="screen active" id="startScreen">
+  <div class="title-main">📡 항공기 레이더 캡틴</div>
+  <div class="title-sub">🛡️ 퀴즈 배틀 - 폭풍우 몬스터를 물리쳐라! 🛡️</div>
+  <div class="plane-hero">✈️</div>
+  <button class="big-btn" onclick="startGame()">🚀 출동하기!</button>
+  <div class="start-info">
+    문제를 맞히면 <b style="color:#76ff03">레이저 공격!</b> 💥<br>
+    틀리면 몬스터의 <b style="color:#ff8a80">반격</b>을 받아요! ⚡<br>
+    총 6문제 · 콤보를 쌓으면 점수 UP!
+  </div>
+</div>
+
+<!-- 배틀 화면 -->
+<div class="screen" id="battleScreen">
+  <div class="hud">
+    <div class="hud-box">
+      <div class="hud-name"><span>✈️ 캡틴의 비행기</span><span id="playerHpTxt">100</span></div>
+      <div class="hp-bar"><div class="hp-fill" id="playerHp"></div></div>
+    </div>
+    <div class="score-box">⭐ <span id="scoreTxt">0</span></div>
+    <div class="hud-box">
+      <div class="hud-name"><span>⛈️ 폭풍우 몬스터</span><span id="bossHpTxt">120</span></div>
+      <div class="hp-bar"><div class="hp-fill" id="bossHp"></div></div>
+    </div>
+  </div>
+  <div class="arena">
+    <div class="combo-tag" id="comboTag"></div>
+    <div class="fighter" id="playerJet">✈️</div>
+    <div class="fighter" id="bossMon">⛈️</div>
+  </div>
+  <div class="q-card" id="qCard">
+    <span class="q-num" id="qNum">문제 1 / 6</span>
+    <div class="q-text" id="qText"></div>
+    <div class="choices" id="choices"></div>
+  </div>
+</div>
+
+<!-- 해설 팝업 -->
+<div id="explainBox">
+  <div class="explain-card" id="explainCard">
+    <div class="explain-emoji" id="exEmoji">🎉</div>
+    <div class="explain-title" id="exTitle">정답!</div>
+    <div class="explain-text" id="exText"></div>
+    <button class="next-btn" onclick="nextQuestion()">다음 ▶</button>
+  </div>
+</div>
+
+<!-- 결과 화면 -->
+<div class="screen" id="resultScreen">
+  <div class="result-emoji" id="resEmoji">🏆</div>
+  <div class="result-title" id="resTitle">승리!</div>
+  <div class="stars-row" id="starsRow">
+    <span class="star">⭐</span><span class="star">⭐</span><span class="star">⭐</span>
+  </div>
+  <div class="result-stats">
+    <div>맞힌 문제: <span id="resCorrect">0</span> / 6</div>
+    <div>최종 점수: <span id="resScore">0</span> 점</div>
+    <div>최대 콤보: <span id="resCombo">0</span> 콤보</div>
+  </div>
+  <button class="big-btn" onclick="restart()">🔄 다시 도전!</button>
+</div>
+
+<script>
+/* ================= 문제 데이터 (PPT 기반) ================= */
+const QUESTIONS = [
+  {
+    q: "📡 야호! 산에서 소리를 치면 메아리가 돌아오듯, 보이지 않는 전파를 쏴서 부딪혀 돌아오는 신호로 위치를 알아내는 비행기의 '마법의 눈'은 무엇일까요?",
+    choices: [
+      "프로펠러",
+      "블랙박스",
+      "레이더",
+      "엔진"
+    ],
+    answer: 2,
+    explain: "레이더(RADAR)는 비행기의 '눈' 역할을 하는 아주 중요한 장치예요. 동굴 속 박쥐나 우리가 산에서 '야호' 하고 소리칠 때 메아리가 돌아오는 것처럼, 전파를 슝~ 쏘고 물체에 부딪혀 돌아오는 신호를 받아서 위치를 알아낸답니다!"
+  },
+  {
+    q: "👃 쉿! 비행기의 커다란 마법의 눈은 겉보기에 그냥 뾰족한 코처럼 보이는 곳 안에 숨어 있어요. 이 부분의 이름은 무엇일까요?",
+    choices: [
+      "꼬리 날개",
+      "노즈콘(Nose Cone)",
+      "조종석",
+      "바퀴(랜딩 기어)"
+    ],
+    answer: 1,
+    explain: "비행기 코(Nose Cone) 안에 숨겨진 마법의 눈이 바로 RADAR예요. 겉보기엔 그냥 뾰족한 코 같지만, 안에는 폭풍우나 캄캄한 밤에도 앞을 볼 수 있게 해주는 놀라운 과학이 숨어 있답니다."
+  },
+  {
+    q: "🙋 누군가 \"거기 있니?\" 하고 묻기 전에, 스스로 내 위치를 알아내서 우주 인공위성과 관제탑에 \"나 여기 있어요!\" 하고 똑똑하게 알려주는 시스템은?",
+    choices: [
+      "ADS-B",
+      "와이파이(Wi-Fi)",
+      "블루투스",
+      "내비게이션"
+    ],
+    answer: 0,
+    explain: "일반 레이더가 '거기 누구 있니?' 하고 질문하고 메아리를 기다린다면, ADS-B는 손들고 발표하듯 비행기가 스스로 '나 여기 있어요!' 하고 관제탑에 크게 알려줘요. 비행기가 스스로 자기 위치를 알려주는 세상에서 가장 똑똑한 시스템이랍니다!"
+  },
+  {
+    q: "🛰️ ADS-B의 3단계 초능력! 첫 번째 단계에서 비행기는 무엇으로 자기 위치를 정확히 알아낼까요?",
+    choices: [
+      "조종사의 눈",
+      "GPS (인공위성)",
+      "나침반",
+      "관제탑의 전화"
+    ],
+    answer: 1,
+    explain: "ADS-B의 1단계는 GPS로 위치 파악! 인공위성으로 내 위치를 정확히 알아요. 그 다음 2단계로 관제탑과 친구 비행기들에게 내 위치를 알려주고, 3단계로 일반 레이더보다 훨씬 빠르고 정확하게 움직인답니다."
+  },
+  {
+    q: "🗼 '하늘의 든든한 교통 경찰관'이라고 불리며, 24시간 내내 단 1초도 쉬지 않고 비행기들을 지켜봐 주는 곳은 어디일까요?",
+    choices: [
+      "관제탑",
+      "주유소",
+      "기차역",
+      "등대"
+    ],
+    answer: 0,
+    explain: "비행기는 하늘에서 절대 혼자 날지 않아요! 공항마다 있는 관제탑은 비행기가 안전하게 하늘을 다니도록 길을 안내하고 지시해요. '지금 북쪽으로 가세요!', '활주로 2번으로 착륙하세요!' 같은 비밀 대화를 전파로 주고받는답니다."
+  },
+  {
+    q: "👂 비행기가 안전하려면 두 가지 감각이 모두 필요해요! '눈' 역할을 하는 것이 레이더라면, 관제탑과 대화하며 '귀와 입' 역할을 하는 것은 무엇일까요?",
+    choices: [
+      "에어컨",
+      "통신(Communication)",
+      "낙하산",
+      "와이퍼"
+    ],
+    answer: 1,
+    explain: "레이더가 비행기가 어디 있는지 '보는' 눈이라면, 통신은 정보를 나누고 지시를 '말하는' 귀와 입이에요. 길을 건널 때 눈으로 자동차를 보고 귀로 소리를 듣는 것처럼, 비행기도 두 가지 감각이 모두 필요하답니다. 눈(RADAR)과 귀(통신)가 함께 일할 때 비행기의 보이지 않는 초능력이 완성돼요!"
+  }
+];
+
+/* ================= 상태 ================= */
+let qIndex = 0, score = 0, combo = 0, maxCombo = 0, correctCnt = 0;
+let playerHP = 100, bossHP = 120;
+const BOSS_MAX = 120;
+let soundOn = true, locked = false;
+
+/* ================= Web Audio 사운드 ================= */
+let AC = null;
+function ctx() { if(!AC) AC = new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==='suspended') AC.resume(); return AC; }
+function tone(freq, dur, type='square', vol=0.15, when=0, slideTo=null) {
+  if(!soundOn) return;
+  const c = ctx(), o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, c.currentTime+when);
+  if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, c.currentTime+when+dur);
+  g.gain.setValueAtTime(vol, c.currentTime+when);
+  g.gain.exponentialRampToValueAtTime(0.001, c.currentTime+when+dur);
+  o.connect(g); g.connect(c.destination);
+  o.start(c.currentTime+when); o.stop(c.currentTime+when+dur+0.05);
+}
+function noise(dur, vol=0.2, when=0) {
+  if(!soundOn) return;
+  const c = ctx(), len = c.sampleRate*dur, buf = c.createBuffer(1,len,c.sampleRate), d = buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i] = (Math.random()*2-1)*(1-i/len);
+  const s = c.createBufferSource(), g = c.createGain(), f = c.createBiquadFilter();
+  f.type='lowpass'; f.frequency.value=900;
+  s.buffer=buf; g.gain.value=vol;
+  s.connect(f); f.connect(g); g.connect(c.destination);
+  s.start(c.currentTime+when);
+}
+const SFX = {
+  click(){ tone(880,0.06,'square',0.1); tone(1320,0.06,'square',0.08,0.05); },
+  start(){ [523,659,784,1047].forEach((f,i)=>tone(f,0.15,'square',0.14,i*0.09)); tone(200,0.6,'sawtooth',0.1,0.35,900); },
+  correct(){ [659,784,988,1319].forEach((f,i)=>tone(f,0.14,'triangle',0.18,i*0.08)); },
+  laser(){ tone(1600,0.28,'sawtooth',0.15,0,180); },
+  hit(){ noise(0.35,0.3); tone(140,0.28,'square',0.2,0,60); },
+  wrong(){ tone(280,0.22,'sawtooth',0.18); tone(200,0.32,'sawtooth',0.18,0.18); },
+  hurt(){ noise(0.3,0.25); tone(110,0.35,'square',0.2,0,50); },
+  combo(){ [784,988,1175,1568].forEach((f,i)=>tone(f,0.1,'square',0.14,i*0.06)); },
+  victory(){ const m=[523,659,784,1047,784,1047,1319,1568]; m.forEach((f,i)=>tone(f,0.22,'triangle',0.18,i*0.14)); m.forEach((f,i)=>tone(f/2,0.22,'sine',0.12,i*0.14)); },
+  defeat(){ [440,392,330,262,196].forEach((f,i)=>tone(f,0.3,'sawtooth',0.15,i*0.22)); },
+  star(){ tone(1568,0.3,'triangle',0.2,0); tone(2093,0.35,'sine',0.15,0.08); },
+  bigBoom(){ noise(0.8,0.45); tone(90,0.7,'square',0.3,0,35); tone(60,0.9,'sawtooth',0.25,0.05,25); },
+  finalBoom(){ noise(1.4,0.55); tone(70,1.2,'square',0.35,0,20); noise(0.9,0.4,0.25); tone(45,1.4,'sawtooth',0.3,0.15,18); }
+};
+function toggleSound(){ soundOn=!soundOn; document.getElementById('sndBtn').textContent = soundOn?'🔊':'🔇'; if(soundOn) SFX.click(); }
+
+/* ================= 별 배경 ================= */
+const starC = document.getElementById('stars'), sctx = starC.getContext('2d');
+let starList = [];
+function initStars(){
+  starC.width=innerWidth; starC.height=innerHeight;
+  starList = Array.from({length:90},()=>({x:Math.random()*starC.width,y:Math.random()*starC.height,r:Math.random()*1.8+0.4,s:Math.random()*0.5+0.1,tw:Math.random()*Math.PI*2}));
+}
+function drawStars(t){
+  sctx.clearRect(0,0,starC.width,starC.height);
+  for(const st of starList){
+    st.y += st.s; if(st.y>starC.height){st.y=0;st.x=Math.random()*starC.width;}
+    const a = 0.4+0.6*Math.abs(Math.sin(t/700+st.tw));
+    sctx.fillStyle=`rgba(255,255,255,${a})`;
+    sctx.beginPath(); sctx.arc(st.x,st.y,st.r,0,7); sctx.fill();
+  }
+}
+
+/* ================= 파티클 FX ================= */
+const fxC = document.getElementById('fxCanvas'), fctx = fxC.getContext('2d');
+let parts = [], beams = [];
+function resizeFx(){ fxC.width=innerWidth; fxC.height=innerHeight; }
+function burst(x,y,colors,n=36,spd=7){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, v=Math.random()*spd+2;
+    parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-2,life:1,decay:0.015+Math.random()*0.02,
+      c:colors[Math.floor(Math.random()*colors.length)],r:Math.random()*5+2,shape:Math.random()<0.3?'star':'circle'});
+  }
+}
+function confettiRain(){
+  const colors=['#ffd54f','#ff5252','#4fc3f7','#69f0ae','#ea80fc','#ffab40'];
+  for(let i=0;i<80;i++){
+    parts.push({x:Math.random()*fxC.width,y:-20-Math.random()*200,vx:(Math.random()-0.5)*3,vy:Math.random()*3+2,
+      life:1,decay:0.004,c:colors[Math.floor(Math.random()*colors.length)],r:Math.random()*6+3,shape:'rect',rot:Math.random()*Math.PI,vr:(Math.random()-0.5)*0.2});
+  }
+}
+function fireBeam(x1,y1,x2,y2,color){ beams.push({x1,y1,x2,y2,color,life:1}); }
+function drawStar5(c,x,y,r,rot){
+  c.beginPath();
+  for(let i=0;i<10;i++){ const rr=i%2?r*0.45:r, a=rot+i*Math.PI/5; c.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); }
+  c.closePath(); c.fill();
+}
+function drawFx(){
+  fctx.clearRect(0,0,fxC.width,fxC.height);
+  beams = beams.filter(b=>b.life>0);
+  for(const b of beams){
+    fctx.strokeStyle=b.color; fctx.lineWidth=8*b.life; fctx.lineCap='round';
+    fctx.shadowColor=b.color; fctx.shadowBlur=24;
+    fctx.beginPath(); fctx.moveTo(b.x1,b.y1); fctx.lineTo(b.x1+(b.x2-b.x1)*Math.min(1,(1-b.life)*3),b.y1+(b.y2-b.y1)*Math.min(1,(1-b.life)*3)); fctx.stroke();
+    fctx.shadowBlur=0; b.life-=0.06;
+  }
+  parts = parts.filter(p=>p.life>0 && p.y<fxC.height+40);
+  for(const p of parts){
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.14; p.life-=p.decay;
+    fctx.globalAlpha=Math.max(0,p.life); fctx.fillStyle=p.c;
+    if(p.shape==='rect'){ p.rot+=p.vr; fctx.save(); fctx.translate(p.x,p.y); fctx.rotate(p.rot); fctx.fillRect(-p.r,-p.r/2,p.r*2,p.r); fctx.restore(); }
+    else if(p.shape==='star'){ drawStar5(fctx,p.x,p.y,p.r*1.6,p.life*4); }
+    else { fctx.beginPath(); fctx.arc(p.x,p.y,p.r,0,7); fctx.fill(); }
+  }
+  fctx.globalAlpha=1;
+}
+function loop(t){ drawStars(t); drawFx(); requestAnimationFrame(loop); }
+addEventListener('resize',()=>{initStars();resizeFx();});
+initStars(); resizeFx(); requestAnimationFrame(loop);
+
+/* ================= 게임 로직 ================= */
+function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+function elCenter(id){ const r=document.getElementById(id).getBoundingClientRect(); return {x:r.left+r.width/2,y:r.top+r.height/2}; }
+function noseOf(){ const r=document.getElementById('playerJet').getBoundingClientRect(); return {x:r.left+r.width*0.9,y:r.top+r.height*0.5}; }
+
+function startGame(){
+  ctx(); SFX.start();
+  qIndex=0; score=0; combo=0; maxCombo=0; correctCnt=0; playerHP=100; bossHP=BOSS_MAX;
+  const bm=document.getElementById('bossMon'); bm.classList.remove('dying');
+  document.getElementById('qCard').style.visibility='visible';
+  updateHud(); show('battleScreen'); renderQuestion();
+}
+function updateHud(){
+  document.getElementById('playerHp').style.width=Math.max(0,playerHP)+'%';
+  document.getElementById('bossHp').style.width=Math.max(0,bossHP/BOSS_MAX*100)+'%';
+  document.getElementById('playerHpTxt').textContent=Math.max(0,playerHP);
+  document.getElementById('bossHpTxt').textContent=Math.max(0,bossHP);
+  document.getElementById('scoreTxt').textContent=score;
+}
+function renderQuestion(){
+  locked=false;
+  const q=QUESTIONS[qIndex];
+  document.getElementById('qNum').textContent=`문제 ${qIndex+1} / ${QUESTIONS.length}`;
+  document.getElementById('qText').textContent=q.q;
+  const box=document.getElementById('choices'); box.innerHTML='';
+  const letters=['A','B','C','D'];
+  q.choices.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.className='choice';
+    b.innerHTML=`<span class="letter">${letters[i]}</span><span>${c}</span>`;
+    b.onclick=()=>answer(i,b);
+    box.appendChild(b);
+  });
+  document.getElementById('qCard').style.animation='none';
+  void document.getElementById('qCard').offsetWidth;
+  document.getElementById('qCard').style.animation='';
+}
+function dmgNumber(x,y,txt,color){
+  const d=document.createElement('div');
+  d.className='dmg-num'; d.textContent=txt; d.style.color=color;
+  d.style.left=(x-30)+'px'; d.style.top=(y-40)+'px';
+  document.body.appendChild(d); setTimeout(()=>d.remove(),1000);
+}
+function answer(i,btn){
+  if(locked) return; locked=true;
+  const q=QUESTIONS[qIndex];
+  const all=document.querySelectorAll('.choice');
+  if(i===q.answer){
+    SFX.correct(); btn.classList.add('correct');
+    all.forEach((b,j)=>{ if(j!==i) b.classList.add('dim'); });
+    combo++; maxCombo=Math.max(maxCombo,combo); correctCnt++;
+    const gained=100+(combo-1)*50; score+=gained;
+    if(combo>=2){ const tag=document.getElementById('comboTag'); tag.textContent=`🔥 ${combo} COMBO! +${gained}`; tag.classList.remove('show'); void tag.offsetWidth; tag.classList.add('show'); SFX.combo(); }
+    setTimeout(()=>{
+      SFX.laser();
+      const p=noseOf(), b=elCenter('bossMon');
+      document.getElementById('playerJet').classList.add('attack-r');
+      fireBeam(p.x,p.y,b.x-20,b.y,'#4fc3f7');
+      fireBeam(p.x,p.y+8,b.x-20,b.y+8,'#76ff03');
+      setTimeout(()=>{
+        SFX.hit();
+        const dmg=20;
+        bossHP-=dmg; updateHud();
+        burst(b.x,b.y,['#ffd54f','#ff9100','#ff5252','#fff'],44,8);
+        dmgNumber(b.x,b.y,'-'+dmg,'#ffd54f');
+        const bm=document.getElementById('bossMon');
+        bm.classList.add('hurt');
+        setTimeout(()=>{bm.classList.remove('hurt');document.getElementById('playerJet').classList.remove('attack-r');},550);
+        setTimeout(()=>showExplain(true,q.explain),650);
+      },300);
+    },500);
+  } else {
+    SFX.wrong(); btn.classList.add('wrong');
+    all[q.answer].classList.add('correct');
+    all.forEach((b,j)=>{ if(j!==i&&j!==q.answer) b.classList.add('dim'); });
+    combo=0;
+    setTimeout(()=>{
+      const p=elCenter('playerJet'), b=elCenter('bossMon');
+      document.getElementById('bossMon').classList.add('attack-l');
+      tone(500,0.3,'sawtooth',0.15,0,120);
+      fireBeam(b.x-30,b.y,p.x+20,p.y,'#ff1744');
+      setTimeout(()=>{
+        SFX.hurt();
+        playerHP-=17; updateHud();
+        burst(p.x,p.y,['#ff5252','#ff8a80','#b71c1c'],30,6);
+        dmgNumber(p.x,p.y,'-17','#ff5252');
+        document.body.classList.add('shake');
+        const pj=document.getElementById('playerJet');
+        pj.classList.add('hurt');
+        setTimeout(()=>{pj.classList.remove('hurt');document.getElementById('bossMon').classList.remove('attack-l');document.body.classList.remove('shake');},550);
+        setTimeout(()=>showExplain(false,q.explain),650);
+      },300);
+    },500);
+  }
+}
+function showExplain(ok,text){
+  const card=document.getElementById('explainCard');
+  card.className='explain-card '+(ok?'ok':'no');
+  document.getElementById('exEmoji').textContent= ok?['🎉','⚡','💥','🌟','🚀','🏅'][qIndex]:'💦';
+  document.getElementById('exTitle').textContent= ok?'정답! 공격 성공!':'아쉬워요! 몬스터의 반격!';
+  document.getElementById('exText').textContent=text;
+  document.getElementById('explainBox').classList.add('show');
+}
+function nextQuestion(){
+  SFX.click();
+  document.getElementById('explainBox').classList.remove('show');
+  qIndex++;
+  if(qIndex>=QUESTIONS.length || playerHP<=0){ finishGame(); } else { renderQuestion(); }
+}
+function finishGame(){
+  const win = correctCnt>=4 && playerHP>0;
+  if(win){ destroyBoss(()=>endGame()); } else { endGame(); }
+}
+function destroyBoss(cb){
+  const bm=document.getElementById('bossMon');
+  const b=elCenter('bossMon');
+  document.getElementById('qCard').style.visibility='hidden';
+  // 연속 폭발
+  const boomColors=['#ffd54f','#ff9100','#ff5252','#fff','#ffab40'];
+  let i=0;
+  const it=setInterval(()=>{
+    SFX.bigBoom();
+    burst(b.x+(Math.random()-0.5)*90, b.y+(Math.random()-0.5)*70, boomColors, 40, 9);
+    document.body.classList.add('shake');
+    setTimeout(()=>document.body.classList.remove('shake'),350);
+    i++;
+    if(i>=4){
+      clearInterval(it);
+      // 최종 대폭발
+      setTimeout(()=>{
+        SFX.finalBoom();
+        bm.classList.add('dying');
+        document.getElementById('flashOverlay').classList.add('flash');
+        burst(b.x,b.y,boomColors,90,13);
+        burst(b.x,b.y,['#fff','#ffe082'],50,7);
+        const msg=document.getElementById('destroyMsg');
+        setTimeout(()=>{ msg.classList.add('show'); SFX.combo(); burst(b.x,b.y,boomColors,60,10); },600);
+        setTimeout(()=>{
+          msg.classList.remove('show');
+          document.getElementById('flashOverlay').classList.remove('flash');
+          cb();
+        },2400);
+      },300);
+    }
+  },420);
+}
+function endGame(){
+  show('resultScreen');
+  const win = correctCnt>=4 && playerHP>0;
+  document.getElementById('resEmoji').textContent = correctCnt===6?'🏆':(win?'🎖️':'💪');
+  document.getElementById('resTitle').textContent = correctCnt===6?'퍼펙트 승리!':(win?'승리!':'다시 도전!');
+  document.getElementById('resCorrect').textContent=correctCnt;
+  document.getElementById('resScore').textContent=score;
+  document.getElementById('resCombo').textContent=maxCombo;
+  const stars=document.querySelectorAll('#starsRow .star');
+  stars.forEach(s=>s.classList.remove('lit'));
+  const n = correctCnt===6?3:(correctCnt>=4?2:(correctCnt>=2?1:0));
+  if(win||correctCnt>=4){ SFX.victory(); confettiRain(); setTimeout(confettiRain,700); setTimeout(confettiRain,1400); }
+  else SFX.defeat();
+  for(let i=0;i<n;i++) setTimeout(()=>{stars[i].classList.add('lit'); SFX.star(); burst(innerWidth/2+(i-1)*80,innerHeight/2-60,['#ffd54f','#fff59d'],20,5);},600+i*450);
+}
+function restart(){ SFX.click(); startGame(); }
+</script>
+</body>
+</html>

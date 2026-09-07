@@ -1,5 +1,4 @@
-# 우주 영화 항공기 퀴즈 배틀
+# KOREA SCIENCE 퀴즈 배틀
 
-KOREA SCIENCE 초등 교재 「우주 영화에 등장하는 항공기들」 기반 RPG 퀴즈 게임.
-
-▶ https://ohaworld777.github.io/space-movie-quiz/
+- 우주 영화 항공기: https://ohaworld777.github.io/space-movie-quiz/
+- 항공기 레이더 시스템: https://ohaworld777.github.io/space-movie-quiz/radar/
